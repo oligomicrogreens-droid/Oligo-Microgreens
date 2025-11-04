@@ -1,0 +1,5 @@
+{
+  "name": "Oligo Microgreen",
+  "description": "An application to manage microgreen orders from client request to harvesting, dispatch, and final delivery, including tracking for harvest shortfalls.",
+  "requestFramePermissions": []
+}
