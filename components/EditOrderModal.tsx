@@ -6,11 +6,20 @@ import { PlusIcon, TrashIcon } from './icons';
 interface EditOrderModalProps {
   order: Order;
   onClose: () => void;
-  onSave: (orderId: string, updatedData: { clientName: string; items: OrderItem[] }) => void;
+  onSave: (orderId: string, updatedData: { clientName: string; items: OrderItem[]; deliveryDate?: Date; location?: string }) => void;
   microgreenVarieties: MicrogreenVarietyName[];
 }
 
 type ModalOrderItem = OrderItem & { _id: number };
+
+const toInputDateString = (date?: Date): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const OrderItemRow: React.FC<{ item: ModalOrderItem; onRemove: (id: number) => void }> = React.memo(({ item, onRemove }) => {
     return (
@@ -25,6 +34,8 @@ const OrderItemRow: React.FC<{ item: ModalOrderItem; onRemove: (id: number) => v
 
 const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave, microgreenVarieties }) => {
   const [clientName, setClientName] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [location, setLocation] = useState('');
   const [items, setItems] = useState<ModalOrderItem[]>([]);
   const [currentItem, setCurrentItem] = useState<{ variety: MicrogreenVarietyName | '', quantity: number | string }>({ variety: '', quantity: '' });
   const nextId = useRef(0);
@@ -32,6 +43,8 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave,
   useEffect(() => {
     if (order) {
       setClientName(order.clientName);
+      setDeliveryDate(toInputDateString(order.deliveryDate));
+      setLocation(order.location || '');
       const initialItems = order.items.map((item, index) => ({
         ...item,
         _id: index
@@ -64,7 +77,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave,
 
     if (clientName && finalItemsWithId.length > 0) {
       const itemsToSubmit = finalItemsWithId.map(({ variety, quantity }) => ({ variety, quantity }));
-      onSave(order.id, { clientName, items: itemsToSubmit });
+      onSave(order.id, { clientName, items: itemsToSubmit, deliveryDate: deliveryDate ? new Date(deliveryDate + 'T00:00:00') : undefined, location });
     } else {
       alert('Please ensure a client name is present and there is at least one item.');
     }
@@ -86,6 +99,29 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave,
                 onChange={(e) => setClientName(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                 placeholder="e.g., Green Leaf Cafe"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="locationEdit" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Location / Address (Optional)</label>
+              <input
+                type="text"
+                id="locationEdit"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                placeholder="e.g., Koramangala, 5th Block"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="deliveryDateEdit" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Delivery Date (Optional)</label>
+              <input
+                type="date"
+                id="deliveryDateEdit"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
               />
             </div>
 

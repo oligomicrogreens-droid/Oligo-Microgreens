@@ -1,3 +1,4 @@
+
 export interface MicrogreenVariety {
   name: string;
   growthCycleDays: number;
@@ -30,6 +31,7 @@ export interface Order {
   actualHarvest?: OrderItem[];
   cashReceived?: number;
   remarks?: string;
+  location?: string;
 }
 
 export type Inventory = Record<MicrogreenVarietyName, number>;
@@ -56,6 +58,7 @@ export interface SeedInventoryItem {
   stockOnHand: number; // in grams
   reorderLevel: number; // in grams
   gramsPerTray: number;
+  safetyStockBoxes?: number; // Desired minimum number of boxes to have available
 }
 export type SeedInventory = Record<MicrogreenVarietyName, SeedInventoryItem>;
 
@@ -76,4 +79,70 @@ export interface YieldRatioData {
   traysSown: number;
   boxesHarvested: number;
   yieldRatio: number | null;
+}
+
+export enum UserRole {
+  Admin = 'Admin',
+  Sales = 'Sales',
+  Production = 'Production',
+  Logistics = 'Logistics',
+}
+
+export interface User {
+  name: string;
+  role: UserRole;
+}
+
+export interface WasteLogEntry {
+  id: string;
+  date: Date;
+  variety: MicrogreenVarietyName;
+  traysWasted: number;
+  reason: string;
+}
+
+export interface DeliveryExpense {
+  id: string;
+  date: Date;
+  deliveryPerson: DeliveryMode;
+  amount: number;
+  remarks?: string;
+}
+
+export enum PurchaseOrderStatus {
+  Draft = 'Draft',
+  Ordered = 'Ordered',
+  Received = 'Received',
+  Cancelled = 'Cancelled',
+}
+
+export interface PurchaseOrderItem {
+  variety: MicrogreenVarietyName;
+  quantity: number; // in grams
+  pricePerGram?: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  supplierName: string;
+  items: PurchaseOrderItem[];
+  status: PurchaseOrderStatus;
+  createdAt: Date;
+  orderedAt?: Date;
+  receivedAt?: Date;
+  totalCost?: number;
+  notes?: string;
+}
+
+// FIX: Define and export the AppData interface to be used across the application.
+export interface AppData {
+    orders: Order[];
+    microgreenVarieties: MicrogreenVariety[];
+    deliveryModes: DeliveryMode[];
+    inventory: Inventory;
+    harvestingLog: Record<string, HarvestLogEntry>;
+    seedInventory: SeedInventory;
+    wasteLog: WasteLogEntry[];
+    deliveryExpenses: DeliveryExpense[];
+    purchaseOrders: PurchaseOrder[];
 }

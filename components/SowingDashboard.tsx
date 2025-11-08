@@ -1,9 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { MicrogreenVarietyName, HarvestLogEntry, Order, MicrogreenVariety, SeedInventory } from '../types';
 import { generateSowingPlan, SowingPlanItem } from '../utils/planner';
 import { LeafIcon, ClipboardDocumentListIcon, LightBulbIcon, ExclamationTriangleIcon } from './icons';
-import SowingAssistant from './SowingAssistant';
-import SowingSuggestions from './SowingSuggestions';
 
 interface SowingDashboardProps {
   microgreenVarieties: MicrogreenVariety[];
@@ -93,24 +92,6 @@ const SowingDashboard: React.FC<SowingDashboardProps> = ({ microgreenVarieties, 
     });
     setTrayCounts(newTrayCounts);
   };
-  
-  const handleApplyAdvice = (variety: MicrogreenVarietyName, trays: number) => {
-      setTrayCounts(prev => {
-          const newCounts = { ...prev };
-          const existing = Number(newCounts[variety] || 0);
-          newCounts[variety] = existing + trays;
-          return newCounts;
-      });
-  };
-
-  const handleApplySuggestion = (variety: MicrogreenVarietyName, trays: number) => {
-      setTrayCounts(prev => {
-          const newCounts = { ...prev };
-          const existing = Number(newCounts[variety] || 0);
-          newCounts[variety] = existing + trays;
-          return newCounts;
-      });
-  };
 
   const handleQuantityChange = (variety: MicrogreenVarietyName, value: string) => {
     if (value === '' || Number(value) >= 0) {
@@ -137,19 +118,7 @@ const SowingDashboard: React.FC<SowingDashboardProps> = ({ microgreenVarieties, 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
       <div className="lg:col-span-2 space-y-8">
         <OrderBasedSowingPlan plan={sowingPlan} onApply={handleApplyPlan} />
-        <SowingAssistant 
-            orders={orders}
-            microgreenVarieties={microgreenVarieties}
-            harvestingLog={harvestingLog}
-            onApplyAdvice={handleApplyAdvice}
-            targetSowingDate={selectedDate}
-        />
-        <SowingSuggestions
-            orders={orders}
-            microgreenVarieties={microgreenVarieties}
-            seedInventory={seedInventory}
-            onApplySuggestion={handleApplySuggestion}
-        />
+        
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <LeafIcon className="w-8 h-8 text-green-500" />

@@ -1,24 +1,33 @@
+
 import React, { useState, useMemo } from 'react';
-import type { Order, HarvestLogEntry } from '../types';
-import { OrderStatus } from '../types';
+import type { Order, HarvestLogEntry, PurchaseOrder, SeedInventory } from '../types';
+import { OrderStatus, UserRole } from '../types';
 import { ChartBarIcon, TruckIcon, ArrowDownTrayIcon, BanknotesIcon } from './icons';
 import { downloadCSV } from '../utils/csv';
+import { useUser } from '../contexts/UserContext';
+import { canSeeFinancials } from '../permissions';
+import ClientEngagementReport from './ClientEngagementReport';
+import LocationSalesReport from './LocationSalesReport';
+import SeedToSaleReport from './SeedToSaleReport';
 
 interface ReportsDashboardProps {
   orders: Order[];
   harvestingLog: Record<string, HarvestLogEntry>;
+  onShowHistory: (clientName: string) => void;
+  purchaseOrders: PurchaseOrder[];
+  seedInventory: SeedInventory;
 }
 
 type ReportPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 const StatCard: React.FC<{ title: string; value: string | number; description: string, icon?: React.ReactNode }> = ({ title, value, description, icon }) => (
-    <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md flex items-start">
+    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-lg flex items-start">
         <div className="flex-grow">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{title}</p>
-            <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{value}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{title}</p>
+            <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">{value}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
         </div>
-        {icon && <div className="flex-shrink-0 text-gray-400 dark:text-gray-500">{icon}</div>}
+        {icon && <div className="flex-shrink-0 text-slate-400 dark:text-slate-500">{icon}</div>}
     </div>
 );
 
@@ -55,9 +64,11 @@ const statusColors: Record<OrderStatus, string> = {
   [OrderStatus.Shortfall]: 'bg-red-500',
 };
 
-const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ orders, harvestingLog }) => {
+const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ orders, harvestingLog, onShowHistory, purchaseOrders, seedInventory }) => {
+  const { currentUser } = useUser();
   const [period, setPeriod] = useState<ReportPeriod>('monthly');
   const [selectedDateValue, setSelectedDateValue] = useState(() => toInputDateString(new Date(), 'month'));
+  const showFinancials = useMemo(() => canSeeFinancials(currentUser?.role || UserRole.Logistics), [currentUser]);
 
   const { filteredOrders, periodLabel } = useMemo(() => {
     let filtered: Order[] = [];
@@ -168,46 +179,46 @@ const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ orders, harvestingL
     <div className="space-y-8">
       <div>
         <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
-          <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Reports Dashboard</h2>
+          <h2 className="text-3xl font-bold text-slate-800 dark:text-white">Reports Dashboard</h2>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="flex items-center p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+              <div className="flex items-center p-1 bg-slate-200 dark:bg-slate-700 rounded-lg">
                 {(['daily', 'weekly', 'monthly', 'yearly'] as ReportPeriod[]).map(p => (
-                    <button key={p} onClick={() => handlePeriodChange(p)} className={`px-3 py-1 text-sm font-semibold rounded-md capitalize transition-colors ${period === p ? 'bg-white dark:bg-gray-800 shadow text-green-600' : 'text-gray-600 dark:text-gray-300'}`}>
+                    <button key={p} onClick={() => handlePeriodChange(p)} className={`px-3 py-1 text-sm font-semibold rounded-md capitalize transition-colors ${period === p ? 'bg-white dark:bg-slate-800 shadow text-green-600' : 'text-slate-600 dark:text-slate-300'}`}>
                         {p}
                     </button>
                 ))}
               </div>
               
               {period === 'yearly' ? (
-                 <input type="number" value={selectedDateValue} onChange={(e) => setSelectedDateValue(e.target.value)} className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm w-full sm:w-auto" />
+                 <input type="number" value={selectedDateValue} onChange={(e) => setSelectedDateValue(e.target.value)} className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm w-full sm:w-auto" />
               ) : (
-                 <input type={period === 'daily' ? 'date' : period} value={selectedDateValue} onChange={(e) => setSelectedDateValue(e.target.value)} className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm w-full sm:w-auto" />
+                 <input type={period === 'daily' ? 'date' : period} value={selectedDateValue} onChange={(e) => setSelectedDateValue(e.target.value)} className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm w-full sm:w-auto" />
               )}
               
-              <button onClick={handleExport} className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800">
+              <button onClick={handleExport} className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-800">
                   <ArrowDownTrayIcon className="w-5 h-5"/>
                   <span className="hidden sm:inline">Export</span>
               </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 ${showFinancials ? 'lg:grid-cols-3 xl:grid-cols-5' : 'lg:grid-cols-2 xl:grid-cols-4'}`}>
           <StatCard title="Total Orders" value={reportData.totalOrders} description={periodLabel} />
           <StatCard title="Total Boxes Sold" value={reportData.totalBoxes} description="50g boxes" />
-          <StatCard title="Total Cash Received" value={`₹${reportData.totalCashReceived.toFixed(2)}`} description="From completed orders" icon={<BanknotesIcon className="w-8 h-8"/>} />
+          {showFinancials && <StatCard title="Total Cash Received" value={`₹${reportData.totalCashReceived.toFixed(2)}`} description="From completed orders" icon={<BanknotesIcon className="w-8 h-8"/>} />}
           <StatCard title="Completed Orders" value={reportData.completedOrders} description={`${Math.round((reportData.completedOrders / (reportData.totalOrders || 1)) * 100)}% completion`} />
           <StatCard title="Shortfall Orders" value={reportData.shortfallOrders} description={`${reportData.totalShortfallBoxes} boxes short`} />
         </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Sales by Variety</h3>
+        <div className="lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Sales by Variety</h3>
           {Object.keys(reportData.varietyCount).length > 0 ? (
             <div className="space-y-4">
               {Object.entries(reportData.varietyCount).sort((a,b) => Number(b[1]) - Number(a[1])).map(([variety, count]) => (
                 <div key={variety} className="flex items-center gap-4 text-sm">
-                  <span className="w-32 text-gray-600 dark:text-gray-300 truncate font-medium">{variety}</span>
-                  <div className="flex-grow bg-gray-200 dark:bg-gray-700 rounded-full h-5">
+                  <span className="w-32 text-slate-600 dark:text-slate-300 truncate font-medium">{variety}</span>
+                  <div className="flex-grow bg-slate-200 dark:bg-slate-700 rounded-full h-5">
                       <div className="bg-green-500 h-5 rounded-full text-right px-2 text-black dark:text-white font-bold text-xs flex items-center justify-end" style={{ width: `${(Number(count) / maxVarietyValue) * 100}%`}}>
                           {count}
                       </div>
@@ -215,59 +226,71 @@ const ReportsDashboard: React.FC<ReportsDashboardProps> = ({ orders, harvestingL
                 </div>
               ))}
             </div>
-          ) : (<p className="text-center text-gray-500 dark:text-gray-400 py-10">No sales data for this period.</p>)}
+          ) : (<p className="text-center text-slate-500 dark:text-slate-400 py-10">No sales data for this period.</p>)}
         </div>
         
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Order Status Breakdown</h3>
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Order Status Breakdown</h3>
           {reportData.totalOrders > 0 ? (
              <ul className="space-y-3">
                {Object.entries(reportData.orderStatusCount).map(([status, count]) => (
                  <li key={status} className="flex items-center text-sm">
                    <span className={`w-3 h-3 rounded-full mr-3 ${statusColors[status as OrderStatus]}`}></span>
-                   <span className="font-medium text-gray-700 dark:text-gray-300 w-28">{status}</span>
-                   <span className="font-semibold text-gray-800 dark:text-white mr-2">{count}</span>
-                   <span className="text-gray-500 dark:text-gray-400">({((Number(count) / reportData.totalOrders) * 100).toFixed(1)}%)</span>
+                   <span className="font-medium text-slate-700 dark:text-slate-300 w-28">{status}</span>
+                   <span className="font-semibold text-slate-800 dark:text-white mr-2">{count}</span>
+                   <span className="text-slate-500 dark:text-slate-400">({((Number(count) / reportData.totalOrders) * 100).toFixed(1)}%)</span>
                  </li>
                ))}
              </ul>
-          ) : (<p className="text-center text-gray-500 dark:text-gray-400 py-10">No orders to analyze.</p>)}
+          ) : (<p className="text-center text-slate-500 dark:text-slate-400 py-10">No orders to analyze.</p>)}
         </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Top Clients {periodLabel}</h3>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Top Clients {periodLabel}</h3>
           {reportData.topClients.length > 0 ? (
             <ol className="space-y-3">
               {reportData.topClients.map((client, index) => (
                 <li key={client.name} className="flex items-center gap-4 text-sm">
-                  <span className="text-lg font-bold text-gray-400 dark:text-gray-500 w-5">#{index+1}</span>
-                  <span className="font-semibold text-gray-800 dark:text-white flex-grow">{client.name}</span>
-                  <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-md">{client.boxes} boxes</span>
+                  <span className="text-lg font-bold text-slate-400 dark:text-slate-500 w-5">#{index+1}</span>
+                  <span className="font-semibold text-slate-800 dark:text-white flex-grow">{client.name}</span>
+                  <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-lg">{client.boxes} boxes</span>
                 </li>
               ))}
             </ol>
-          ) : (<p className="text-center text-gray-500 dark:text-gray-400 py-10">No client sales data.</p>)}
+          ) : (<p className="text-center text-slate-500 dark:text-slate-400 py-10">No client sales data.</p>)}
         </div>
         
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Deliveries by Mode {periodLabel}</h3>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Deliveries by Mode {periodLabel}</h3>
           {Object.keys(reportData.deliveryModeCount).length > 0 ? (
             <ul className="space-y-3">
               {Object.entries(reportData.deliveryModeCount)
                 .sort(([, a], [, b]) => Number(b) - Number(a))
                 .map(([mode, count]) => (
                 <li key={mode} className="flex items-center gap-4 text-sm">
-                    <TruckIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <span className="font-semibold text-gray-800 dark:text-white flex-grow">{mode}</span>
-                  <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-md">{count} deliveries</span>
+                    <TruckIcon className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                  <span className="font-semibold text-slate-800 dark:text-white flex-grow">{mode}</span>
+                  <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-lg">{count} deliveries</span>
                 </li>
               ))}
             </ul>
-          ) : (<p className="text-center text-gray-500 dark:text-gray-400 py-10">No delivery data.</p>)}
+          ) : (<p className="text-center text-slate-500 dark:text-slate-400 py-10">No delivery data.</p>)}
         </div>
       </div>
+      
+      <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700 space-y-8">
+        <SeedToSaleReport 
+          orders={orders}
+          purchaseOrders={purchaseOrders}
+          seedInventory={seedInventory}
+          harvestingLog={harvestingLog}
+        />
+        <LocationSalesReport orders={orders} />
+        <ClientEngagementReport orders={orders} onShowHistory={onShowHistory} />
+      </div>
+
     </div>
   );
 };

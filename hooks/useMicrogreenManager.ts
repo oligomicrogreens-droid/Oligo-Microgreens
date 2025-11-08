@@ -1,157 +1,116 @@
+
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Order, OrderStatus, MicrogreenVariety, MicrogreenVarietyName, Inventory, DeliveryMode, AggregatedHarvestList, OrderItem, ShortfallReport, HarvestLogEntry, SeedInventory, SeedInventoryItem } from '../types';
-import { OrderStatus as OrderStatusEnum } from '../types';
+import type { Order, OrderStatus, MicrogreenVariety, MicrogreenVarietyName, Inventory, DeliveryMode, AggregatedHarvestList, OrderItem, ShortfallReport, HarvestLogEntry, SeedInventory, SeedInventoryItem, AppData, WasteLogEntry, DeliveryExpense, PurchaseOrder, PurchaseOrderItem } from '../types';
+import { OrderStatus as OrderStatusEnum, PurchaseOrderStatus } from '../types';
 
-const initialVarieties: MicrogreenVariety[] = [
-    { name: "Basil", growthCycleDays: 20 },
-    { name: "Broccoli", growthCycleDays: 10 },
-    { name: "Cilantro", growthCycleDays: 22 },
-    { name: "Edible Flower", growthCycleDays: 45 },
-    { name: "Fenugreek", growthCycleDays: 12 },
-    { name: "Kale", growthCycleDays: 12 },
-    { name: "Live Tray Gongura", growthCycleDays: 14 },
-    { name: "Live Tray Mustard", growthCycleDays: 8 },
-    { name: "Live Tray Pea shoots", growthCycleDays: 12 },
-    { name: "Live Tray Pink Radish", growthCycleDays: 9 },
-    { name: "Live Tray Red Amaranth", growthCycleDays: 20 },
-    { name: "Live Tray Sango Radish", growthCycleDays: 9 },
-    { name: "Live Tray Sunflower", growthCycleDays: 10 },
-    { name: "Mix Box", growthCycleDays: 10 }, // Composite product, using an average
-    { name: "Mustard", growthCycleDays: 6 },
-    { name: "Nasturtium Leaves", growthCycleDays: 14 },
-    { name: "Pea Shoots", growthCycleDays: 10 },
-    { name: "Pink Radish", growthCycleDays: 7 },
-    { name: "Purple Kohlrabi", growthCycleDays: 10 },
-    { name: "Red Amaranth", growthCycleDays: 18 },
-    { name: "Sango Radish", growthCycleDays: 7 },
-    { name: "Sunflower", growthCycleDays: 8 },
-    { name: "Wheatgrass", growthCycleDays: 9 }
-].sort((a, b) => a.name.localeCompare(b.name));
+const STORAGE_KEY = 'microgreen-app-data';
 
-const initialDeliveryModes: DeliveryMode[] = [ "Tiffin", "Porter", "Priority", "Himanshu", "Suryance", "Shivas" ];
+// A function to create initial empty/default data
+const getInitialData = (): AppData => ({
+  orders: [],
+  microgreenVarieties: [
+    { name: 'Sunflower', growthCycleDays: 8 },
+    { name: 'Radish', growthCycleDays: 7 },
+    { name: 'Peas', growthCycleDays: 10 },
+    { name: 'Broccoli', growthCycleDays: 9 },
+    { name: 'Mustard', growthCycleDays: 6 },
+  ],
+  deliveryModes: ['Porter', 'Swiggy Genie', 'Tiffin'],
+  inventory: {},
+  harvestingLog: {},
+  seedInventory: {
+    'Sunflower': { stockOnHand: 5000, reorderLevel: 1000, gramsPerTray: 120, safetyStockBoxes: 10 },
+    'Radish': { stockOnHand: 2500, reorderLevel: 500, gramsPerTray: 80, safetyStockBoxes: 5 },
+    'Peas': { stockOnHand: 8000, reorderLevel: 2000, gramsPerTray: 200, safetyStockBoxes: 8 },
+    'Broccoli': { stockOnHand: 1500, reorderLevel: 300, gramsPerTray: 30, safetyStockBoxes: 5 },
+    'Mustard': { stockOnHand: 1200, reorderLevel: 300, gramsPerTray: 40, safetyStockBoxes: 0 },
+  },
+  wasteLog: [],
+  deliveryExpenses: [],
+  purchaseOrders: [],
+});
 
-const initialOrders: Order[] = [
-  { id: 'ORD-001', clientName: 'Green Leaf Cafe', items: [{ variety: 'Sunflower', quantity: 8 }], status: OrderStatusEnum.Pending, createdAt: new Date(new Date().setDate(new Date().getDate() - 5)), deliveryDate: new Date(new Date().setDate(new Date().getDate() + 2)) },
-  { id: 'ORD-002', clientName: 'Healthy Bites', items: [{ variety: 'Pea Shoots', quantity: 12 }, { variety: 'Broccoli', quantity: 6 }], status: OrderStatusEnum.Pending, createdAt: new Date(new Date().setDate(new Date().getDate() - 4)) },
-  { id: 'ORD-003', clientName: 'The Salad Bar', items: [{ variety: 'Mustard', quantity: 5 }], status: OrderStatusEnum.Pending, createdAt: new Date(new Date().setDate(new Date().getDate() - 3)), deliveryDate: new Date(new Date().setDate(new Date().getDate() + 4)) },
-  { id: 'ORD-004', clientName: 'Juice Junction', items: [{ variety: 'Cilantro', quantity: 7 }, { variety: 'Sunflower', quantity: 7 }], status: OrderStatusEnum.Pending, createdAt: new Date(new Date().setDate(new Date().getDate() - 1)) },
-];
-
-const createInitialInventory = (varietyNames: MicrogreenVarietyName[]): Inventory => {
-    return varietyNames.reduce((acc, varietyName) => {
-        acc[varietyName] = 0;
-        return acc;
-    }, {} as Inventory);
+// Recursively parses objects/arrays to convert ISO date strings back into Date objects.
+const parseDates = (obj: any): any => {
+    if (!obj || typeof obj !== 'object') {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => parseDates(item));
+    }
+    // ISO date string format check
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+    const newObj: { [key: string]: any } = {};
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const value = obj[key];
+            if (typeof value === 'string' && isoDateRegex.test(value)) {
+                newObj[key] = new Date(value);
+            } else if (typeof value === 'object' && value !== null) {
+                newObj[key] = parseDates(value);
+            } else {
+                newObj[key] = value;
+            }
+        }
+    }
+    return newObj;
 };
 
 
 export const useMicrogreenManager = () => {
-  const [microgreenVarieties, setMicrogreenVarieties] = useState<MicrogreenVariety[]>(() => {
-      try {
-        const saved = localStorage.getItem('microgreen-app-varieties');
-        return saved ? JSON.parse(saved) : initialVarieties;
-      } catch (e) {
-        console.error("Error loading varieties:", e);
-        return initialVarieties;
-      }
-  });
-  const [deliveryModes, setDeliveryModes] = useState<DeliveryMode[]>(() => {
-    try {
-        const saved = localStorage.getItem('microgreen-app-deliveryModes');
-        return saved ? JSON.parse(saved) : initialDeliveryModes;
-    } catch (e) {
-        console.error("Error loading delivery modes:", e);
-        return initialDeliveryModes;
-    }
-  });
+  const [appData, setAppData] = useState<AppData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  // Initial load from localStorage
+  useEffect(() => {
+      try {
+          const storedData = localStorage.getItem(STORAGE_KEY);
+          if (storedData) {
+              const parsedData = JSON.parse(storedData);
+              const data = parseDates(parsedData);
+              // Ensure new properties exist
+              if (!data.purchaseOrders) data.purchaseOrders = [];
+              setAppData(data);
+          } else {
+              setAppData(getInitialData());
+          }
+      } catch (err) {
+          console.error("Failed to load data from localStorage", err);
+          setError("Could not load data. It may be corrupted. You may need to clear your browser's site data.");
+          setAppData(getInitialData());
+      }
+  }, []);
+
+  // Persist data to localStorage whenever it changes
+  useEffect(() => {
+      if (appData) {
+          try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+          } catch (err) {
+              console.error("Failed to save data to localStorage", err);
+              setError("Could not save your changes.");
+          }
+      }
+  }, [appData]);
+  
+  const data = useMemo(() => appData || getInitialData(), [appData]);
+  const { orders, microgreenVarieties, deliveryModes, inventory, harvestingLog, seedInventory, wasteLog, deliveryExpenses, purchaseOrders } = data;
   const microgreenVarietyNames = useMemo(() => microgreenVarieties.map(v => v.name), [microgreenVarieties]);
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-      try {
-        const saved = localStorage.getItem('microgreen-app-orders');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            return parsed.map((order: Order) => ({
-                ...order,
-                createdAt: new Date(order.createdAt),
-                deliveryDate: order.deliveryDate ? new Date(order.deliveryDate) : undefined,
-            }));
-        }
-      } catch (e) {
-        console.error("Error loading orders:", e);
-      }
-      return initialOrders;
-  });
-
-  const [inventory, setInventory] = useState<Inventory>(() => {
-      try {
-        const saved = localStorage.getItem('microgreen-app-inventory');
-        if(saved) return JSON.parse(saved);
-        return createInitialInventory(microgreenVarieties.map(v => v.name));
-      } catch (e) {
-        console.error("Error loading inventory:", e);
-        return createInitialInventory(microgreenVarieties.map(v => v.name));
-      }
-  });
-
-  const [harvestingLog, setHarvestingLog] = useState<Record<string, HarvestLogEntry>>(() => {
-    try {
-        const saved = localStorage.getItem('microgreen-app-harvestingLog');
-        return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-        console.error("Error loading harvesting log:", e);
-        return {};
-    }
-  });
-
-  const [seedInventory, setSeedInventory] = useState<SeedInventory>(() => {
-    try {
-        const saved = localStorage.getItem('microgreen-app-seedInventory');
-        return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-        console.error("Error loading seed inventory:", e);
-        return {};
-    }
-  });
-
-  // Effect to synchronize seed inventory with the definitive list of varieties
-  useEffect(() => {
-    setSeedInventory(prevInventory => {
-        const newInventory = { ...prevInventory };
-        let hasChanged = false;
-        microgreenVarieties.forEach(variety => {
-            if (!newInventory[variety.name]) {
-                newInventory[variety.name] = {
-                    stockOnHand: 1000, // Default: 1kg
-                    reorderLevel: 200, // Default: 200g
-                    gramsPerTray: 15,  // Default: 15g
-                };
-                hasChanged = true;
-            }
-        });
-        return hasChanged ? newInventory : prevInventory;
-    });
-  }, [microgreenVarieties]);
-
-  // Effect to save state to localStorage whenever it changes
-  useEffect(() => {
-    try {
-        localStorage.setItem('microgreen-app-orders', JSON.stringify(orders));
-        localStorage.setItem('microgreen-app-varieties', JSON.stringify(microgreenVarieties));
-        localStorage.setItem('microgreen-app-deliveryModes', JSON.stringify(deliveryModes));
-        localStorage.setItem('microgreen-app-inventory', JSON.stringify(inventory));
-        localStorage.setItem('microgreen-app-harvestingLog', JSON.stringify(harvestingLog));
-        localStorage.setItem('microgreen-app-seedInventory', JSON.stringify(seedInventory));
-    } catch (e) {
-        console.error("Failed to save data to localStorage:", e);
-    }
-  }, [orders, microgreenVarieties, deliveryModes, inventory, harvestingLog, seedInventory]);
 
   const aggregatedHarvestList = useMemo<AggregatedHarvestList>(() => {
-    const list: AggregatedHarvestList = createInitialInventory(microgreenVarietyNames);
+    const list: AggregatedHarvestList = {};
+    microgreenVarietyNames.forEach(name => list[name] = 0);
+    
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
     orders
-      .filter(order => order.status === OrderStatusEnum.Pending)
+      .filter(order => {
+        if (order.status !== OrderStatusEnum.Pending) return false;
+        if (!order.deliveryDate) return true;
+        return new Date(order.deliveryDate) <= today;
+      })
       .forEach(order => {
         order.items.forEach(item => {
           if (list.hasOwnProperty(item.variety)) {
@@ -162,163 +121,55 @@ export const useMicrogreenManager = () => {
     return list;
   }, [orders, microgreenVarietyNames]);
 
-  const handleHarvest = useCallback((harvestedQuantities: Record<MicrogreenVarietyName, number | string>): ShortfallReport => {
-    const availableHarvest: Record<MicrogreenVarietyName, number> = {};
-    Object.keys(harvestedQuantities).forEach(key => {
-      availableHarvest[key as MicrogreenVarietyName] = Number(harvestedQuantities[key as MicrogreenVarietyName] || 0);
-    });
-
-    const pendingOrders = orders
-      .filter(o => o.status === OrderStatusEnum.Pending)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-
-    const processedOrders: Record<string, Order> = {};
-    const shortfallReport: ShortfallReport = [];
-
-    for (const order of pendingOrders) {
-      let orderHasShortfall = false;
-      const actualHarvestForThisOrder: OrderItem[] = order.items.map(item => {
-        const needed = item.quantity;
-        const available = availableHarvest[item.variety] || 0;
-        const allocated = Math.min(needed, available);
-        availableHarvest[item.variety] = available - allocated;
-        if (allocated < needed) {
-          orderHasShortfall = true;
-          shortfallReport.push({
-            orderId: order.id,
-            clientName: order.clientName,
-            variety: item.variety,
-            requested: needed,
-            allocated: allocated,
-            shortfall: needed - allocated,
-          });
-        }
-        return { variety: item.variety, quantity: allocated };
-      });
-      processedOrders[order.id] = {
-        ...order,
-        status: orderHasShortfall ? OrderStatusEnum.Shortfall : OrderStatusEnum.Harvested,
-        actualHarvest: actualHarvestForThisOrder
-      };
-    }
-    
-    const updatedOrders = orders.map(order => processedOrders[order.id] || order);
-
-    setInventory(prevInventory => {
-      const newInventory = { ...prevInventory };
-      for (const variety in harvestedQuantities) {
-        if (newInventory.hasOwnProperty(variety)) {
-          newInventory[variety as MicrogreenVarietyName] += Number(harvestedQuantities[variety as MicrogreenVarietyName] || 0);
-        }
-      }
-      return newInventory;
-    });
-
-    setOrders(updatedOrders);
-    return shortfallReport;
-  }, [orders]);
-
-  const handleDispatch = useCallback((orderId: string, deliveryMode: DeliveryMode) => {
-    const orderToDispatch = orders.find(o => o.id === orderId);
-
-    if (!orderToDispatch || (orderToDispatch.status !== OrderStatusEnum.Harvested && orderToDispatch.status !== OrderStatusEnum.Shortfall)) return;
-
-    const itemsToDeduct = orderToDispatch.actualHarvest || orderToDispatch.items;
-
-    setInventory(currentInventory => {
-      const canDispatch = itemsToDeduct.every(item => currentInventory[item.variety] >= item.quantity);
-
-      if (canDispatch) {
-        setOrders(prevOrders => prevOrders.map(order => order.id === orderId ? { ...order, status: OrderStatusEnum.Dispatched, deliveryMode } : order));
-        const newInventory = { ...currentInventory };
-        itemsToDeduct.forEach(item => { newInventory[item.variety] -= item.quantity; });
-        return newInventory;
-      } else {
-        alert(`Cannot dispatch ${orderToDispatch.clientName}'s order (${orderId}): Not enough inventory.`);
-        return currentInventory;
-      }
-    });
-  }, [orders]);
-
-  const handleCompleteDelivery = useCallback((orderId: string, details: { cashReceived?: number; remarks?: string }) => {
-    setOrders(prevOrders => prevOrders.map(order =>
-      order.id === orderId && order.status === OrderStatusEnum.Dispatched
-        ? { 
-            ...order, 
-            status: OrderStatusEnum.Completed,
-            cashReceived: details.cashReceived,
-            remarks: details.remarks,
-          }
-        : order
-    ));
-  }, []);
-  
-  const addOrder = useCallback((clientName: string, items: OrderItem[]) => {
-    if (!clientName || items.length === 0) return;
-    const newOrder: Order = {
-        id: `ORD-${String(Date.now()).slice(-4)}-${String(orders.length + 1).padStart(3, '0')}`,
-        clientName,
-        items,
-        status: OrderStatusEnum.Pending,
-        createdAt: new Date(),
-    };
-    setOrders(prev => [newOrder, ...prev]);
-  }, [orders.length]);
-
-  const updateOrder = useCallback((orderId: string, updatedData: { clientName: string; items: OrderItem[] }) => {
-    if (!updatedData.clientName || updatedData.items.length === 0) {
-        alert("Client name and at least one item are required.");
-        return;
-    }
-    setOrders(prevOrders => 
-        prevOrders.map(order => {
-            if (order.id === orderId) {
-                const { actualHarvest, deliveryMode, ...restOfOrder } = order;
-                return { 
-                    ...restOfOrder, 
-                    clientName: updatedData.clientName, 
-                    items: updatedData.items,
-                    status: OrderStatusEnum.Pending 
-                };
-            }
-            return order;
-        })
-    );
-  }, []);
-
-  const importOrders = useCallback((ordersToImport: Omit<Order, 'id' | 'status' | 'createdAt'>[]) => {
-      const newOrders: Order[] = ordersToImport.map((order, index) => ({
-          id: `ORD-IMP-${String(Date.now()).slice(-4)}-${String(orders.length + index + 1).padStart(3, '0')}`,
-          clientName: order.clientName,
-          items: order.items,
+  const addOrder = useCallback((clientName: string, items: OrderItem[], deliveryDate?: Date, location?: string) => {
+      if (!clientName || items.length === 0) return;
+      const newOrder: Order = {
+          id: `ORD-${Date.now()}`,
+          clientName,
+          items,
           status: OrderStatusEnum.Pending,
           createdAt: new Date(),
-          deliveryDate: order.deliveryDate ? new Date(order.deliveryDate) : undefined,
-      }));
-      setOrders(prev => [...newOrders, ...prev]);
-      alert(`${newOrders.length} orders have been successfully imported.`);
-  }, [orders.length]);
-
-  const addMicrogreenVariety = useCallback((name: string, growthCycleDays: number) => {
-      const newName = name.trim();
-      if (newName && !microgreenVarietyNames.includes(newName)) {
-          const newVariety: MicrogreenVariety = { name: newName, growthCycleDays };
-          setMicrogreenVarieties(prev => [...prev, newVariety].sort((a, b) => a.name.localeCompare(b.name)));
-          setInventory(prev => ({...prev, [newName]: 0}));
-          setSeedInventory(prev => ({...prev, [newName]: { stockOnHand: 0, reorderLevel: 100, gramsPerTray: 15 } }));
-      }
-  }, [microgreenVarietyNames]);
-  
-  const updateMicrogreenVariety = useCallback((name: string, growthCycleDays: number) => {
-    setMicrogreenVarieties(prev => prev.map(v => v.name === name ? { ...v, growthCycleDays } : v));
+          deliveryDate,
+          location,
+      };
+      setAppData(prev => prev ? { ...prev, orders: [newOrder, ...prev.orders] } : null);
   }, []);
 
-  const addDeliveryMode = useCallback((mode: string) => {
-      const newMode = mode.trim();
-      if (newMode && !deliveryModes.includes(newMode)) {
-          setDeliveryModes(prev => [...prev, newMode]);
-      }
-  }, [deliveryModes]);
+  const updateOrder = useCallback((orderId: string, updatedData: { clientName: string; items: OrderItem[]; deliveryDate?: Date; location?: string }) => {
+     setAppData(prev => {
+        if (!prev) return null;
+        const newOrders = prev.orders.map(o => {
+            if (o.id === orderId) {
+                return { ...o, ...updatedData, status: OrderStatusEnum.Pending };
+            }
+            return o;
+        });
+        return { ...prev, orders: newOrders };
+     });
+  }, []);
+
+  const deleteOrder = useCallback((orderIdToDelete: string) => {
+    setAppData(prev => prev ? { ...prev, orders: prev.orders.filter(o => o.id !== orderIdToDelete) } : null);
+  }, []);
+  
+  const deleteAllOrders = useCallback(async () => {
+    if (window.confirm("Are you sure you want to delete ALL orders? This is permanent and will clear all order history, but will not affect other data like varieties or logs.")) {
+      setAppData(prev => prev ? { ...prev, orders: [] } : null);
+    }
+  }, []);
+
+  const addMicrogreenVariety = useCallback((name: string, growthCycleDays: number) => {
+    const newName = name.trim();
+    if (newName && !microgreenVarietyNames.includes(newName)) {
+        const newVariety: MicrogreenVariety = { name: newName, growthCycleDays };
+        setAppData(prev => {
+            if (!prev) return null;
+            const newVarieties = [...prev.microgreenVarieties, newVariety];
+            const newSeedInventory = { ...prev.seedInventory, [newName]: { stockOnHand: 0, reorderLevel: 0, gramsPerTray: 0, safetyStockBoxes: 0 }};
+            return { ...prev, microgreenVarieties: newVarieties, seedInventory: newSeedInventory };
+        });
+    }
+  }, [microgreenVarietyNames]);
 
   const deleteMicrogreenVariety = useCallback((varietyNameToDelete: MicrogreenVarietyName) => {
     const isVarietyInUse = orders.some(order => order.items.some(item => item.variety === varietyNameToDelete));
@@ -326,110 +177,310 @@ export const useMicrogreenManager = () => {
       alert(`Cannot delete "${varietyNameToDelete}". It is currently used in one or more orders.`);
       return;
     }
-    setMicrogreenVarieties(currentVarieties => currentVarieties.filter(v => v.name !== varietyNameToDelete));
-    setInventory(currentInventory => {
-      const newInventory = { ...currentInventory };
-      delete newInventory[varietyNameToDelete];
-      return newInventory;
-    });
-    setSeedInventory(currentInventory => {
-      const newInventory = { ...currentInventory };
-      delete newInventory[varietyNameToDelete];
-      return newInventory;
+    setAppData(prev => {
+        if (!prev) return null;
+        const newVarieties = prev.microgreenVarieties.filter(v => v.name !== varietyNameToDelete);
+        const newSeedInventory = { ...prev.seedInventory };
+        delete newSeedInventory[varietyNameToDelete];
+        // Note: also consider cleaning up from orders, logs etc. or prevent deletion if in use.
+        return { ...prev, microgreenVarieties: newVarieties, seedInventory: newSeedInventory };
     });
   }, [orders]);
-
-  const deleteOrder = useCallback((orderIdToDelete: string) => {
-    setOrders(prev => prev.filter(order => order.id !== orderIdToDelete));
-  }, []);
-
+  
   const saveSowingLog = useCallback((date: Date, trays: Record<MicrogreenVarietyName, number | string>) => {
-    const toYYYYMMDD = (d: Date): string => {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
+    const toYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
     const dateString = toYYYYMMDD(date);
 
     const numericTrays: Record<MicrogreenVarietyName, number> = {};
+    let seedDeductions: Record<MicrogreenVarietyName, number> = {};
+
     Object.keys(trays).forEach(v => {
-      numericTrays[v as MicrogreenVarietyName] = Number(trays[v as MicrogreenVarietyName] || 0);
+      const variety = v as MicrogreenVarietyName;
+      const count = Number(trays[variety] || 0);
+      numericTrays[variety] = count;
+      const gramsPerTray = seedInventory[variety]?.gramsPerTray || 0;
+      seedDeductions[variety] = (seedDeductions[variety] || 0) + (count * gramsPerTray);
     });
+    
+    setAppData(prev => {
+      if (!prev) return null;
+      const newHarvestingLog = { ...prev.harvestingLog, [dateString]: { date: dateString, trays: numericTrays } };
+      
+      const newSeedInventory = { ...prev.seedInventory };
+      Object.entries(seedDeductions).forEach(([variety, deduction]) => {
+          if (newSeedInventory[variety as MicrogreenVarietyName]) {
+              newSeedInventory[variety as MicrogreenVarietyName].stockOnHand -= deduction;
+          }
+      });
 
-    setSeedInventory(prevInventory => {
-        const newInventory = { ...prevInventory };
-        const previousTraysForDate = harvestingLog[dateString]?.trays || {};
-
-        Object.keys(numericTrays).forEach(vName => {
-            const varietyName = vName as MicrogreenVarietyName;
-            const inventoryItem = newInventory[varietyName];
-            if (inventoryItem) {
-                const oldTrayCount = previousTraysForDate[varietyName] || 0;
-                const newTrayCount = numericTrays[varietyName] || 0;
-                const trayDifference = newTrayCount - oldTrayCount;
-                if (trayDifference !== 0) {
-                    const seedUsage = trayDifference * inventoryItem.gramsPerTray;
-                    newInventory[varietyName] = {
-                        ...inventoryItem,
-                        stockOnHand: inventoryItem.stockOnHand - seedUsage,
-                    };
-                }
-            }
-        });
-        return newInventory;
+      return { ...prev, harvestingLog: newHarvestingLog, seedInventory: newSeedInventory };
     });
+  }, [seedInventory]);
+  
+  const handleHarvest = useCallback(async (harvestedQuantities: Record<MicrogreenVarietyName, number | string>): Promise<ShortfallReport> => {
+      const report: ShortfallReport = [];
+      setAppData(prev => {
+          if (!prev) return null;
+          
+          const newState = JSON.parse(JSON.stringify(prev));
+          
+          const today = new Date();
+          today.setHours(23, 59, 59, 999);
+          
+          const ordersToProcess = newState.orders
+              .filter((o: Order) => o.status === OrderStatusEnum.Pending && (!o.deliveryDate || new Date(o.deliveryDate) <= today))
+              .sort((a: Order, b: Order) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-    setHarvestingLog(prev => ({
-        ...prev,
-        [dateString]: { date: dateString, trays: numericTrays }
-    }));
-  }, [harvestingLog]);
+          const availableHarvest: Record<string, number> = {};
+          Object.keys(harvestedQuantities).forEach(key => {
+              availableHarvest[key] = Number(harvestedQuantities[key] || 0);
+          });
 
-  const updateSeedInventoryItem = useCallback((variety: MicrogreenVarietyName, updatedItem: Partial<SeedInventoryItem>) => {
-    setSeedInventory(prev => ({
-        ...prev,
-        [variety]: {
-            ...prev[variety],
-            ...updatedItem,
-        }
-    }));
+          ordersToProcess.forEach((order: Order) => {
+              let hasShortfall = false;
+              const actualHarvest: OrderItem[] = [];
+              
+              order.items.forEach((item: OrderItem) => {
+                  const requested = item.quantity;
+                  const available = availableHarvest[item.variety] || 0;
+                  const allocated = Math.min(requested, available);
+                  
+                  actualHarvest.push({ variety: item.variety, quantity: allocated });
+                  availableHarvest[item.variety] -= allocated;
+                  
+                  if (allocated < requested) {
+                      hasShortfall = true;
+                      report.push({
+                          orderId: order.id, clientName: order.clientName, variety: item.variety,
+                          requested: requested, allocated: allocated, shortfall: requested - allocated,
+                      });
+                  }
+              });
+              
+              const orderInState = newState.orders.find((o: Order) => o.id === order.id);
+              if (orderInState) {
+                  orderInState.status = hasShortfall ? OrderStatusEnum.Shortfall : OrderStatusEnum.Harvested;
+                  orderInState.actualHarvest = actualHarvest;
+              }
+          });
+          
+          return parseDates(newState);
+      });
+      return report;
   }, []);
-
-  const resetApplicationData = useCallback(() => {
-    if (window.confirm("Are you sure you want to reset all application data? This action is permanent and cannot be undone.")) {
-        localStorage.removeItem('microgreen-app-orders');
-        localStorage.removeItem('microgreen-app-varieties');
-        localStorage.removeItem('microgreen-app-deliveryModes');
-        localStorage.removeItem('microgreen-app-inventory');
-        localStorage.removeItem('microgreen-app-harvestingLog');
-        localStorage.removeItem('microgreen-app-seedInventory');
-        window.location.reload();
+  
+  const handleDispatch = useCallback(async (orderId: string, deliveryMode: DeliveryMode) => {
+      setAppData(prev => {
+          if (!prev) return null;
+          const newOrders = prev.orders.map(o => o.id === orderId ? { ...o, status: OrderStatusEnum.Dispatched, deliveryMode } : o);
+          return { ...prev, orders: newOrders };
+      });
+  }, []);
+  
+  const handleCompleteDelivery = useCallback(async (orderId: string, details: { cashReceived?: number; remarks?: string }) => {
+      setAppData(prev => {
+          if (!prev) return null;
+          const newOrders = prev.orders.map(o => o.id === orderId ? { ...o, status: OrderStatusEnum.Completed, ...details } : o);
+          return { ...prev, orders: newOrders };
+      });
+  }, []);
+  
+  const resetApplicationData = useCallback(async () => {
+    if (window.confirm("Are you sure you want to reset all data? This is permanent and will clear everything stored in your browser for this app.")) {
+      localStorage.removeItem(STORAGE_KEY);
+      setAppData(getInitialData());
     }
   }, []);
 
+  const importOrders = useCallback(async (ordersToImport: Omit<Order, 'id' | 'status' | 'createdAt'>[]) => {
+    const newOrders: Order[] = ordersToImport.map((o, i) => ({
+        ...o,
+        id: `IMP-${Date.now()}-${i}`,
+        status: OrderStatusEnum.Pending,
+        createdAt: new Date(),
+    }));
+    setAppData(prev => prev ? { ...prev, orders: [...newOrders, ...prev.orders] } : null);
+    alert(`${newOrders.length} orders imported successfully.`);
+  }, []);
+  
+  const importVarieties = useCallback(async (varietiesToImport: MicrogreenVariety[]) => {
+    let importedCount = 0;
+    setAppData(prev => {
+        if (!prev) return null;
+        const existingVarietyNames = new Set(prev.microgreenVarieties.map(v => v.name.toLowerCase()));
+        const newVarietiesToAdd: MicrogreenVariety[] = [];
+        const newSeedInventoryEntries: SeedInventory = {};
+
+        varietiesToImport.forEach(v => {
+            const trimmedName = v.name.trim();
+            const growthCycleDays = Number(v.growthCycleDays);
+
+            if (trimmedName && !isNaN(growthCycleDays) && growthCycleDays > 0 && !existingVarietyNames.has(trimmedName.toLowerCase())) {
+                newVarietiesToAdd.push({ name: trimmedName, growthCycleDays });
+                newSeedInventoryEntries[trimmedName] = { stockOnHand: 0, reorderLevel: 0, gramsPerTray: 0, safetyStockBoxes: 0 };
+                existingVarietyNames.add(trimmedName.toLowerCase());
+            }
+        });
+        
+        importedCount = newVarietiesToAdd.length;
+        if (importedCount > 0) {
+            return {
+                ...prev,
+                microgreenVarieties: [...prev.microgreenVarieties, ...newVarietiesToAdd].sort((a, b) => a.name.localeCompare(b.name)),
+                seedInventory: { ...prev.seedInventory, ...newSeedInventoryEntries }
+            };
+        }
+        return prev;
+    });
+    alert(`${importedCount} new ${importedCount === 1 ? 'variety' : 'varieties'} imported successfully.`);
+  }, []);
+
+  const addDeliveryMode = useCallback(async (mode: string) => {
+    const newMode = mode.trim();
+    if (!newMode) return;
+    setAppData(prev => {
+        if (!prev || prev.deliveryModes.includes(newMode)) return prev;
+        return { ...prev, deliveryModes: [...prev.deliveryModes, newMode] };
+    });
+  }, []);
+
+  const updateSeedInventoryItem = useCallback(async (variety: MicrogreenVarietyName, itemUpdate: Partial<SeedInventoryItem>) => {
+    setAppData(prev => {
+        if (!prev) return null;
+        const newSeedInventory = { ...prev.seedInventory };
+        newSeedInventory[variety] = { ...newSeedInventory[variety], ...itemUpdate };
+        return { ...prev, seedInventory: newSeedInventory };
+    });
+  }, []);
+  
+  const exportAllData = useCallback(async () => {
+    if (!appData) return;
+    const dataString = JSON.stringify(appData, null, 2);
+    const blob = new Blob([dataString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = `microgreen-hub-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [appData]);
+
+  const importAllData = useCallback(async (fileContent: string) => {
+      try {
+        const importedData = JSON.parse(fileContent);
+        if (importedData && 'orders' in importedData && 'microgreenVarieties' in importedData) {
+            if (window.confirm("This will overwrite all current data. Are you sure?")) {
+                setAppData(parseDates(importedData));
+            }
+        } else {
+            throw new Error("Invalid data file format.");
+        }
+      } catch (e) {
+          alert(`Import failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+      }
+  }, []);
+
+  const addWasteLogEntry = useCallback(async (entry: Omit<WasteLogEntry, 'id'>) => {
+    const newEntry: WasteLogEntry = { ...entry, id: `WST-${Date.now()}` };
+    setAppData(prev => prev ? { ...prev, wasteLog: [newEntry, ...prev.wasteLog] } : null);
+  }, []);
+
+  const deleteWasteLogEntry = useCallback(async (id: string) => {
+    setAppData(prev => prev ? { ...prev, wasteLog: prev.wasteLog.filter(e => e.id !== id) } : null);
+  }, []);
+  
+  const addDeliveryExpense = useCallback(async (expense: Omit<DeliveryExpense, 'id'>) => {
+    const newExpense: DeliveryExpense = { ...expense, id: `EXP-${Date.now()}` };
+    setAppData(prev => prev ? { ...prev, deliveryExpenses: [newExpense, ...prev.deliveryExpenses] } : null);
+  }, []);
+  
+  const deleteDeliveryExpense = useCallback(async (id: string) => {
+    setAppData(prev => prev ? { ...prev, deliveryExpenses: prev.deliveryExpenses.filter(e => e.id !== id) } : null);
+  }, []);
+  
+  // Purchase Order Management
+  const addPurchaseOrder = useCallback((po: Omit<PurchaseOrder, 'id' | 'status' | 'createdAt'>) => {
+    const newPO: PurchaseOrder = {
+      ...po,
+      id: `PO-${Date.now()}`,
+      status: PurchaseOrderStatus.Draft,
+      createdAt: new Date(),
+    };
+    setAppData(prev => prev ? { ...prev, purchaseOrders: [newPO, ...prev.purchaseOrders] } : null);
+  }, []);
+
+  const updatePurchaseOrder = useCallback((poId: string, updatedData: { supplierName: string; items: PurchaseOrderItem[]; notes?: string }) => {
+    setAppData(prev => {
+      if (!prev) return null;
+      const newPOs = prev.purchaseOrders.map(po => 
+        po.id === poId ? { ...po, ...updatedData } : po
+      );
+      return { ...prev, purchaseOrders: newPOs };
+    });
+  }, []);
+
+  const deletePurchaseOrder = useCallback((poId: string) => {
+    setAppData(prev => prev ? { ...prev, purchaseOrders: prev.purchaseOrders.filter(po => po.id !== poId) } : null);
+  }, []);
+
+  const markPOAsOrdered = useCallback((poId: string) => {
+    setAppData(prev => {
+      if (!prev) return null;
+      const newPOs = prev.purchaseOrders.map(po =>
+        po.id === poId ? { ...po, status: PurchaseOrderStatus.Ordered, orderedAt: new Date() } : po
+      );
+      return { ...prev, purchaseOrders: newPOs };
+    });
+  }, []);
+
+  const markPOAsReceived = useCallback((poId: string) => {
+    setAppData(prev => {
+      if (!prev) return null;
+      const poToReceive = prev.purchaseOrders.find(po => po.id === poId);
+      if (!poToReceive || poToReceive.status !== PurchaseOrderStatus.Ordered) return prev;
+
+      const newPOs = prev.purchaseOrders.map(po =>
+        po.id === poId ? { ...po, status: PurchaseOrderStatus.Received, receivedAt: new Date() } : po
+      );
+      
+      const newSeedInventory = { ...prev.seedInventory };
+      poToReceive.items.forEach(item => {
+        if (newSeedInventory[item.variety]) {
+          newSeedInventory[item.variety].stockOnHand += item.quantity;
+        } else {
+          // This case should ideally not happen if varieties are managed properly
+          newSeedInventory[item.variety] = { stockOnHand: item.quantity, reorderLevel: 0, gramsPerTray: 0 };
+        }
+      });
+      
+      return { ...prev, purchaseOrders: newPOs, seedInventory: newSeedInventory };
+    });
+  }, []);
+  
+  const cancelPurchaseOrder = useCallback((poId: string) => {
+     setAppData(prev => {
+      if (!prev) return null;
+      const newPOs = prev.purchaseOrders.map(po =>
+        po.id === poId ? { ...po, status: PurchaseOrderStatus.Cancelled } : po
+      );
+      return { ...prev, purchaseOrders: newPOs };
+    });
+  }, []);
+
   return { 
-    orders, 
-    inventory, 
-    aggregatedHarvestList,
-    microgreenVarieties,
-    microgreenVarietyNames,
-    deliveryModes,
-    harvestingLog,
-    seedInventory,
-    handleHarvest, 
-    handleDispatch, 
-    handleCompleteDelivery,
-    addOrder,
-    updateOrder,
-    importOrders,
-    addMicrogreenVariety,
-    updateMicrogreenVariety,
-    addDeliveryMode,
-    deleteMicrogreenVariety,
-    deleteOrder,
-    saveSowingLog,
-    resetApplicationData,
-    updateSeedInventoryItem,
+    orders, inventory, aggregatedHarvestList, microgreenVarieties, microgreenVarietyNames,
+    deliveryModes, harvestingLog, seedInventory, wasteLog, deliveryExpenses, purchaseOrders,
+    isLoading: appData === null, isSaving: false, error, 
+    handleHarvest, handleDispatch, handleCompleteDelivery, addOrder, updateOrder,
+    addMicrogreenVariety, deleteMicrogreenVariety, deleteOrder, deleteAllOrders,
+    saveSowingLog, 
+    resetApplicationData, importOrders, importVarieties, addDeliveryMode, updateSeedInventoryItem,
+    exportAllData, importAllData, addWasteLogEntry, deleteWasteLogEntry,
+    addDeliveryExpense, deleteDeliveryExpense,
+    addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, markPOAsOrdered, markPOAsReceived, cancelPurchaseOrder,
+    // Placeholders for functions not implemented via UI but kept for type safety
+    updateMicrogreenVariety: async () => alert("This function is not implemented."),
   };
 };

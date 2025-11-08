@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Order, OrderItem, MicrogreenVarietyName } from '../types';
 
@@ -72,18 +73,20 @@ const ImportOrdersModal: React.FC<ImportOrdersModalProps> = ({ onClose, onImport
             return {
                 clientName: rowData.clientName,
                 deliveryDate: rowData.deliveryDate,
+                location: rowData.location || undefined,
                 item: { variety: rowData.variety, quantity },
             };
         });
         
         // Group items into orders
-        const ordersMap = new Map<string, { clientName: string; deliveryDate: Date; items: OrderItem[] }>();
+        const ordersMap = new Map<string, { clientName: string; deliveryDate: Date; location?: string; items: OrderItem[] }>();
         rawItems.forEach(row => {
             const key = `${row.clientName}::${row.deliveryDate}`;
             if (!ordersMap.has(key)) {
                 ordersMap.set(key, {
                     clientName: row.clientName,
                     deliveryDate: new Date(row.deliveryDate + 'T00:00:00'),
+                    location: row.location,
                     items: []
                 });
             }
@@ -104,31 +107,40 @@ const ImportOrdersModal: React.FC<ImportOrdersModalProps> = ({ onClose, onImport
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Import Orders from CSV</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Import Orders from File (Excel/CSV)</h2>
                 </div>
                 <div className="p-6 space-y-6 overflow-y-auto">
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Instructions</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Upload a CSV file with the following columns to bulk-create new orders. Items with the same <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">clientName</code> and <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">deliveryDate</code> will be grouped into a single order.</p>
-                        <table className="w-full text-left text-sm mt-2 border-collapse">
-                            <thead>
-                                <tr className="border-b border-gray-300 dark:border-gray-600">
+                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">1. Prepare Your File</h3>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 space-y-2">
+                            <p>To import orders from Excel, you must first save it as a <strong className="font-semibold text-gray-700 dark:text-gray-200">CSV (Comma-separated values)</strong> file.</p>
+                            <ol className="list-decimal list-inside space-y-1 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg">
+                                <li>In Excel, go to <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">File &gt; Save As</code>.</li>
+                                <li>Choose <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">CSV UTF-8 (.csv)</code> from the file format dropdown.</li>
+                                <li>Ensure your file has the required columns shown below.</li>
+                            </ol>
+                        </div>
+                        <table className="w-full text-left text-sm mt-4 border-collapse">
+                             <thead className="border-b-2 border-gray-300 dark:border-gray-600">
+                                <tr>
                                     <th className="p-2 font-semibold">Column</th>
                                     <th className="p-2 font-semibold">Example</th>
                                     <th className="p-2 font-semibold">Notes</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td className="p-2">clientName</td><td className="p-2 font-mono">Green Leaf Cafe</td><td className="p-2">Client's name.</td></tr>
-                                <tr><td className="p-2">deliveryDate</td><td className="p-2 font-mono">2024-12-25</td><td className="p-2">Required format: YYYY-MM-DD.</td></tr>
-                                <tr><td className="p-2">variety</td><td className="p-2 font-mono">Sunflower</td><td className="p-2">Must match an existing variety name exactly.</td></tr>
-                                <tr><td className="p-2">quantity</td><td className="p-2 font-mono">10</td><td className="p-2">Number of 50g boxes.</td></tr>
+                                <tr className="border-b border-gray-200 dark:border-gray-700"><td className="p-2">clientName</td><td className="p-2 font-mono">Green Leaf Cafe</td><td className="p-2">Client's name.</td></tr>
+                                <tr className="border-b border-gray-200 dark:border-gray-700"><td className="p-2">deliveryDate</td><td className="p-2 font-mono">2024-12-25</td><td className="p-2">Required format: YYYY-MM-DD.</td></tr>
+                                <tr className="border-b border-gray-200 dark:border-gray-700"><td className="p-2">variety</td><td className="p-2 font-mono">Sunflower</td><td className="p-2">Must match an existing variety name exactly.</td></tr>
+                                <tr className="border-b border-gray-200 dark:border-gray-700"><td className="p-2">quantity</td><td className="p-2 font-mono">10</td><td className="p-2">Number of 50g boxes.</td></tr>
+                                <tr><td className="p-2">location</td><td className="p-2 font-mono">Koramangala</td><td className="p-2">(Optional) Delivery address or area.</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <div>
-                        <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select CSV File</label>
-                        <input id="csv-upload" type="file" accept=".csv" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
+                    
+                    <div className="mt-4">
+                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">2. Upload the CSV File</h3>
+                        <input id="csv-upload" type="file" accept=".csv,text/csv" onChange={handleFileChange} className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-800 hover:file:bg-green-200 dark:file:bg-green-900 dark:file:text-green-200 dark:hover:file:bg-green-800" />
                     </div>
                     
                     {error && (
@@ -140,12 +152,13 @@ const ImportOrdersModal: React.FC<ImportOrdersModalProps> = ({ onClose, onImport
                     
                     {parsedOrders.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Preview</h3>
+                            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">3. Preview & Confirm</h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{parsedOrders.length} orders will be created.</p>
                             <div className="mt-2 max-h-48 overflow-y-auto space-y-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md">
                                 {parsedOrders.map((order, index) => (
                                     <div key={index} className="bg-white dark:bg-gray-800 p-2 rounded shadow-sm">
                                         <p className="font-semibold">{order.clientName} - {order.deliveryDate.toLocaleDateString()}</p>
+                                        {order.location && <p className="text-xs text-gray-500 dark:text-gray-400">{order.location}</p>}
                                         <ul className="text-xs list-disc list-inside">
                                             {order.items.map(item => <li key={item.variety}>{item.variety}: {item.quantity} boxes</li>)}
                                         </ul>

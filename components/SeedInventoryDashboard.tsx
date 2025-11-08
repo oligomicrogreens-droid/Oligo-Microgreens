@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SeedInventory, SeedInventoryItem, MicrogreenVarietyName, MicrogreenVariety } from '../types';
 import { SeedIcon, ExclamationTriangleIcon } from './icons';
@@ -16,11 +17,13 @@ const SeedInventoryRow: React.FC<{
   const [stock, setStock] = useState(item.stockOnHand);
   const [reorder, setReorder] = useState(item.reorderLevel);
   const [grams, setGrams] = useState(item.gramsPerTray);
+  const [safetyStock, setSafetyStock] = useState(item.safetyStockBoxes || 0);
 
   useEffect(() => {
     setStock(item.stockOnHand);
     setReorder(item.reorderLevel);
     setGrams(item.gramsPerTray);
+    setSafetyStock(item.safetyStockBoxes || 0);
   }, [item]);
 
   const handleBlur = (field: keyof SeedInventoryItem, value: number) => {
@@ -69,6 +72,15 @@ const SeedInventoryRow: React.FC<{
           className="w-24 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500"
         />
       </td>
+      <td className="px-6 py-4">
+        <input
+          type="number"
+          value={safetyStock}
+          onChange={e => setSafetyStock(Number(e.target.value))}
+          onBlur={e => handleBlur('safetyStockBoxes', Number(e.target.value))}
+          className="w-24 px-2 py-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500"
+        />
+      </td>
       <td className="px-6 py-4 text-center font-mono font-bold text-lg text-green-600 dark:text-green-400">
         {isFinite(estimatedTraysLeft) ? estimatedTraysLeft : 'N/A'}
       </td>
@@ -94,6 +106,7 @@ const SeedInventoryDashboard: React.FC<SeedInventoryDashboardProps> = ({ seedInv
               <th scope="col" className="px-6 py-3">Stock on Hand (g)</th>
               <th scope="col" className="px-6 py-3">Reorder Level (g)</th>
               <th scope="col" className="px-6 py-3">Grams per Tray</th>
+              <th scope="col" className="px-6 py-3">Safety Stock (Boxes)</th>
               <th scope="col" className="px-6 py-3 text-center">Est. Trays Left</th>
             </tr>
           </thead>

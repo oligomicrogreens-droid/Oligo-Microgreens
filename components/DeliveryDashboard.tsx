@@ -1,10 +1,11 @@
 
 
+
 import React, { useState } from 'react';
 import type { Order } from '../types';
 import { OrderStatus } from '../types';
 import OrderStatusBadge from './OrderStatusBadge';
-import { CheckCircleIcon, ClipboardDocumentListIcon } from './icons';
+import { CheckCircleIcon, ClipboardDocumentListIcon, MapPinIcon } from './icons';
 import DeliveryManifestModal from './DeliveryManifestModal';
 
 interface DeliveryDashboardProps {
@@ -30,6 +31,11 @@ const DeliveryCard: React.FC<{ order: Order, onComplete: (orderId: string, detai
         <div>
           <p className="text-sm font-semibold text-green-600 dark:text-green-400">{order.id}</p>
           <p className="text-lg font-bold text-gray-800 dark:text-white">{order.clientName}</p>
+          {order.location && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                <MapPinIcon className="w-3 h-3" /> {order.location}
+            </p>
+          )}
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Delivery via: <span className="font-semibold">{order.deliveryMode}</span></p>
         </div>
         <OrderStatusBadge status={order.status} />
